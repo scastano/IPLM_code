@@ -22,9 +22,9 @@ source("FUNCTIONS_CULICOIDES.R")
 
 ## Basic parameters
 nLinesPlot  <- 1000 ## nb lines taken for plots 
-PROP_FEMALE <- 1/2  ## Currently assume 50% of eggs are female
+PROP_FEMALE <- 1/2  ## 50% of eggs are female
 TRAJ_LENGTH <- 150
-PDF  <- TRUE ## FALSE
+PDF  <- FALSE ## TRUE
 PLOT <- "AnnualTraj"
 CASE <- "IPLM" ## "CLM
 print(paste("Working with case", CASE))
@@ -41,7 +41,7 @@ setwd(figDir)
 
 W0_10 <- vector("list", nLinesPlot)
 ## obtain W0 at 10C
-for (ii in 1:nLinesPlot) {  ## ii = 1
+for (ii in 1:nLinesPlot) {
     Res   <- c(resE[ii],resL[ii], resP[ii],resGC[ii])
     lres  <- sum(Res)
     (jj   <- which(T==10)) 
@@ -53,7 +53,7 @@ for (ii in 1:nLinesPlot) {  ## ii = 1
     M <- nf_IPLM(paras=Paras, res=Res, femfec=Femfec, gCycle=1)
     ## Eigen values and vectors
     Eigen      <- eigen(M)
-    (DomEigVal <- Mod(Eigen$values[1])) ## Should be real, but small numerical errors occur when stable_adult_proportion ~= 0
+    (DomEigVal <- Mod(Eigen$values[1]))
     (w         <- Mod(Eigen$vectors[,1]))
     (v         <- Mod(eigen(t(M))$vectors[,1]))
     (sumW  <- sum(w))
@@ -65,46 +65,42 @@ for (ii in 1:nLinesPlot) {  ## ii = 1
 #########################################
 ## Relative Population Density - Total ##
 if (PDF) 
-    pdf(file = paste0("Transient_Traj_", CASE, "_", "_nlinesPlot", nLinesPlot, ".pdf"),
+    pdf(file = paste0("Transient_Traj_", CASE, "_", INI_POP, "_nlinesPlot", nLinesPlot, ".pdf"),
         width = 11, height = 2.4)
 MAR <- c(2.4, 0, 1.2, 1.4)
-CEX.AXIS <- 1.5 
-CEX.MAIN <- 1.6 
+CEX.AXIS <- 1.5
+CEX.MAIN <- 1.6
 YMAX <- 1
 par(mar=MAR, mfrow=c(1,5))
 if(CASE=="CLM") 
-    par(mai=c(0.3, 0.4, 0.3, 0),  omi=c(0, 0.2, 0, 0.25))
-if(CASE=="IPLM")
-    par(mai=c(0.35, 0.4, 0.0, 0), omi=c(0, 0.2, 0.13, 0.25))
-##
+    par(mai=c(0.3, 0.4, 0.3, 0),  omi=c(0, 0.3, 0, 0.25))
+if(CASE=="IPLM" | CASE=="MAP")
+    par(mai=c(0.35, 0.4, 0.0, 0), omi=c(0, 0.3, 0.05, 0.25))
 subT <- T[-1]
-for (tt in subT) { 
+for (tt in subT) {
     print(tt)
-    if(tt==10) {}
     RelDensity        <- matrix(1, nrow=nLinesPlot, ncol=TRAJ_LENGTH+1)
     Amplification     <- matrix(1, nrow=nLinesPlot, ncol=TRAJ_LENGTH+1)
     Attenuation       <- matrix(1, nrow=nLinesPlot, ncol=TRAJ_LENGTH+1)
     AmplifiedInertia  <- rep(1, nLinesPlot)
     AttenuatedInertia <- rep(1, nLinesPlot)
-    for (ii in 1:nLinesPlot) { 
-        if (ii %% floor(nLinesPlot / 20) == 0)
-            print(ii)
-        Res  <- c(resE[ii],resL[ii], resP[ii],resGC[ii])
-        lres <- sum(Res)
+    for (ii in 1:nLinesPlot) {
+        Res   <- c(resE[ii],resL[ii], resP[ii],resGC[ii])
+        lres  <- sum(Res)
         (jj   <- which(subT==tt) + 1) 
         Paras <- rbind(c(muE[ii,jj],  scE[ii,jj], surE[ii,jj]),
                        c(muL[ii,jj],  scL[ii,jj], surL[ii,jj]),
                        c(muP[ii,jj],  scP[ii,jj], surP[ii,jj]),
                        c(muGC[ii,jj], scGC[ii,jj], surGC[ii,jj]))
         Femfec <- fec[ii,jj] * PROP_FEMALE
-        M <- nf_IPLM(paras=Paras, res=Res, femfec=Femfec, gCycle=1)
+        M      <- nf_IPLM(paras=Paras, res=Res, femfec=Femfec, gCycle=1)
         ## Define population density vector N
         N <- matrix(0, ncol=lres, nrow=TRAJ_LENGTH+1)
         ## Eigen values and vectors
         Eigen      <- eigen(M)
         (DomEigVal <- Mod(Eigen$values[1]))
-        (w     <- Mod(Eigen$vectors[,1]))
-        (v     <- Mod(eigen(t(M))$vectors[,1]))
+        (w         <- Mod(Eigen$vectors[,1]))
+        (v         <- Mod(eigen(t(M))$vectors[,1]))
         (sumW  <- sum(w))
         (sumVW <- as.numeric(v %*% w))
         ## Inertia
@@ -113,11 +109,15 @@ for (tt in subT) {
         ## Standardise Population Matrix
         stM   <- M / DomEigVal
         stMtt <- diag(1, lres, lres)
-        ## Set initial conditions
-        N0    <- W0_10[[ii]]
+        ## set initial conditions
+        if (INI_POP=="ENDEMIC"){
+            N0 <- W0_10[[ii]]
+        } else {
+            warning("INI_POP not recognised")
+        }
         N[1,] <- N0
         ## Loop on time steps
-        for (ll in 1:TRAJ_LENGTH) { 
+        for (ll in 1:TRAJ_LENGTH) {
             ## Generate standardised matrix for step ll
             (stMtt <- stMtt %*% stM)
             ## Project population 1 time step
@@ -140,7 +140,7 @@ for (tt in subT) {
             (AT <- sort(seq(ceiling(YLIM[2]), floor(YLIM[1]), by=-BY)))
             (BY <- BY * 2)
         }
-        (AT <- sort(pretty(c(YLIM)))) 
+        (AT    <- sort(pretty(c(YLIM))))
     }
     (LAB  <- rep("", length(AT)))
     (iLAB <- c(1,length(LAB)))
@@ -152,24 +152,25 @@ for (tt in subT) {
         plot(0:length_plot, 0:length_plot, las=1,
              ylim=YLIM, yaxt="n", xaxt="n",
              main=paste(tt, "°C", sep=""),
-             typ="n", xlab="", ylab="", cex.axis=CEX.AXIS, cex.main=CEX.MAIN)
+             typ="n", xlab="", ylab="", cex.axis=CEX.AXIS, cex.main=CEX.MAIN) 
         ## Ylab
         title(xlab = "", ylab = TeX("Density$/ \\lambda_1^t$"),
-              outer = TRUE, line = -1, cex.lab= 1.9)
+              outer = TRUE, line = -1, cex.lab= 2.3)
     } else {
         plot(0:length_plot, 0:length_plot, las=1,
              ylim=YLIM, yaxt="n", xaxt="n",
-             typ="n", xlab="", ylab="", cex.axis=CEX.AXIS, cex.main=CEX.MAIN)
+             typ="n", xlab="", ylab="", cex.axis=CEX.AXIS, cex.main=CEX.MAIN) 
         ## Ylab
         title(xlab = "", ylab = TeX("Density$/ \\lambda_1^t$"),
-              outer = TRUE, line = -1, cex.lab= 1.9, adj=0.7)
+              outer = TRUE, line = -1, cex.lab= 2.3, adj=0.7)
     }
-    ## ADD 'CASE' in right side
+    ## ADD CASE in right side
+    Cex.OuterR <- 1.45
     if(tt==T[lT]) {
         if (CASE=="CLM")
-            mtext(CASE, outer=TRUE, side=4, line=0.5, cex.lab=1.3)
-        if (CASE=="IPLM")
-            mtext(CASE, outer=TRUE, side=4, line=0.5, cex.lab=1.3, adj=0.65)
+            mtext(CASE, outer=TRUE, side=4, line=0.75, cex=Cex.OuterR)
+        if (CASE=="IPLM" | CASE=="MAP")
+            mtext(CASE, outer=TRUE, side=4, line=0.75, cex=Cex.OuterR, adj=0.65)
     }
     ## ADD X-AXIS TICKS
     (atX <- pretty(c(0, TRAJ_LENGTH), n=3))
